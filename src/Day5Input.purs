@@ -1,7 +1,7 @@
 module Day5Input where
 
-testInput :: String
-testInput =
+testInputRaw :: String
+testInputRaw =
   """
 0,9 -> 5,9
 8,0 -> 0,8
@@ -15,8 +15,8 @@ testInput =
 5,5 -> 8,2
 """
 
-realInput :: String
-realInput =
+realInputRaw :: String
+realInputRaw =
   """
 565,190 -> 756,381
 402,695 -> 402,138

@@ -9,5 +9,9 @@
   "devDependencies": {
     "purescript-language-server": "0.15.8",
     "purty": "^7.0.0"
+  },
+  "scripts": {
+    "repl": "spago repl",
+    "build": "spago build"
   }
 }
