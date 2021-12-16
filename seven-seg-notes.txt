@@ -1,0 +1,59 @@
+ 1111
+2    3
+2    3
+ 4444
+5    6
+5    6
+ 7777
+
+be cfbegad cbdgef fgaecd cgeb fdcge agebfd fecdb fabcd edb | fdgacbe cefdb cefbgd gcbe -> 8394
+
+be      -- 1 -- b == 3 e == 6
+bde     -- 7 -- d == 1
+bceg    -- 4 -- c == 4 g == 2
+cdefg   -- 5 -- e == 6
+bcdef   -- 3 -- c == 4 f == 7
+abcdf   -- 2
+bcdefg  -- 9
+acdefg  -- 6
+abdefg  -- 0
+cfbegad -- 8
+
+| fdgacbe cefdb cefbgd gcbe -> 8394
+
+easy num 1 == find seg 3,6
+easy num 7 == solve seg 1
+easy num 4 == find seg 2,4
+num 3 is 5 segs and superset of num 7 == solve seg 4 by intersect with num 4, solve seg 7
+refresh num 4 == solve seg 2 as remaning for 4
+solve num 9 is 6 segs and superset of num 3 ==
+num 5 is 6 segs and uses seg 2 == solve 6
+refresh num 1 == solve seg 3 as remaining for 1
+solve num 2 as remaining 5 segs
+solve num 6 as using seg 4 == solve seg 5 (not necessary?)
+solve num 0 as last input
+
+method:
+* alphabetize strings -- easier solving at end?
+* map digits to strings
+* map seg numbers to seg letters
+* map lengths to inputs
+* create "containsSegNum" to check if an input contains a seg by num
+* create "containsSegLetters" to check if input contains all seg letters (use mapped value)
+* create a "subSegments" to compute difference between two inputs
+* create a "intersectSegments" to compute intersect beteween two segments
+
+
+steps:
+find 1 by len
+find 4 by len
+find 7 by len
+find 8 by len
+find 3 by len 5 and containsSegLetters of 7
+find 9 by len 6 and containsSegLetters of 3
+solve seg 2 by sub num 3 from num 4
+solve seg 4 by by sub num 1 from num 4 then intersect with num 3
+find 5 by len 6 and containsSegNum 2
+find 2 as remaining 5 seg
+find 6 as len 6 and containsSegNum 4
+find 0 as last len 6
