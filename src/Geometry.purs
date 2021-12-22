@@ -2,6 +2,16 @@ module Geometry where
 
 import Prelude
 
+import Data.Array (concat, filter, intercalate, length, modifyAt, updateAt, (!!), (..))
+import Data.Foldable (foldl)
+import Data.Int (fromString)
+import Data.Maybe (Maybe(..))
+import Data.String (split, Pattern(..))
+import Data.Traversable (traverse)
+
+--------------------------------------------------------------------------------
+-- Point
+--------------------------------------------------------------------------------
 newtype Point
   = Point
   { x :: Int
@@ -17,6 +27,9 @@ instance ordPoint :: Ord Point where
 instance showPoint :: Show Point where
   show (Point { x, y }) = "(" <> show x <> "," <> show y <> ")"
 
+--------------------------------------------------------------------------------
+-- Line
+--------------------------------------------------------------------------------
 newtype Line
   = Line
   { start :: Point
@@ -26,6 +39,9 @@ newtype Line
 instance showLine :: Show Line where
   show (Line { start, stop }) = show start <> " -> " <> show stop
 
+--------------------------------------------------------------------------------
+-- Dimensions
+--------------------------------------------------------------------------------
 newtype Dimensions
   = Dimensions
   { width :: Int
@@ -35,6 +51,9 @@ newtype Dimensions
 instance showDimensions :: Show Dimensions where
   show (Dimensions { width, height }) = show width <> "x" <> show height
 
+--------------------------------------------------------------------------------
+-- Rect
+--------------------------------------------------------------------------------
 newtype Rect
   = Rect
   { origin :: Point
@@ -43,3 +62,78 @@ newtype Rect
 
 instance showRect :: Show Rect where
   show (Rect { origin, size }) = "( " <> show origin <> " " <> show size <> " )"
+
+--------------------------------------------------------------------------------
+-- Grid
+--------------------------------------------------------------------------------
+newtype Grid a
+  = Grid (Array (Array a))
+
+instance showGrid :: Show a => Show (Grid a) where
+  show (Grid rows) =
+    let
+        showRow = map show >>> intercalate "" >>> (<>) "\n"
+     in
+       map showRow rows # foldl (<>) ""
+
+data NeighborType
+  = Adjacent
+  | Diagonal
+
+neighbors :: Point -> NeighborType -> Array Point
+neighbors (Point { x, y }) Adjacent =
+  [ Point { x: x - 1, y }
+  , Point { x: x + 1, y }
+  , Point { x, y: y + 1 }
+  , Point { x, y: y - 1 }
+  ]
+
+neighbors p@(Point { x, y }) Diagonal =
+  concat
+    [ neighbors p Adjacent
+    , [ Point { x: x - 1, y: y - 1 }
+      , Point { x: x + 1, y: y - 1 }
+      , Point { x: x - 1, y: y + 1 }
+      , Point { x: x + 1, y: y + 1 }
+      ]
+    ]
+
+inGrid :: forall a. Grid a -> Point -> Boolean
+inGrid grid (Point { x, y }) = case gridDimensions grid of
+  Just (Dimensions d) -> x >= 0 && y >= 0 && x <= d.width - 1 && y <= d.height - 1
+  Nothing -> false
+
+validNeighbors :: forall a. Point -> NeighborType -> Grid a -> Array Point
+validNeighbors point ntype g = neighbors point ntype # filter (inGrid g)
+
+gridPoints :: forall a. Grid a -> Array Point
+gridPoints g = case gridDimensions g of
+  Just (Dimensions d) -> 0 .. (d.height - 1) >>= \y -> 0 .. (d.width - 1) <#> \x -> Point { x, y }
+  Nothing -> []
+
+gridDimensions :: forall a. Grid a -> Maybe Dimensions
+gridDimensions (Grid rows) = do
+  height <- pure $ length rows
+  width <- length <$> rows !! 0
+  pure $ Dimensions { width, height }
+
+gridValueAt :: forall a. Point -> Grid a -> Maybe a
+gridValueAt (Point { x, y }) (Grid ys) = ys !! y >>= \xs -> xs !! x
+
+toGrid :: forall a. Array (Array a) -> Maybe (Grid a)
+toGrid a = Just (Grid a)
+
+parseLine :: String -> Maybe (Array Int)
+parseLine = split (Pattern "") >>> traverse fromString
+
+gridFromIntStrings :: String -> Maybe (Grid Int)
+gridFromIntStrings = split (Pattern "\n") >>> traverse parseLine >=> toGrid
+
+modifyGridAt :: forall a. Point -> (a -> a) -> Grid a -> Maybe (Grid a)
+modifyGridAt (Point { x, y }) fn (Grid rows) = do
+  cols <- rows !! y
+  newRow <- modifyAt x fn cols
+  updateAt y newRow rows >>= toGrid
+
+insertGridAt :: forall a. Point -> a -> Grid a -> Maybe (Grid a)
+insertGridAt p i = modifyGridAt p (\_ -> i)
