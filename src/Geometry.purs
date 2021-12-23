@@ -1,13 +1,17 @@
 module Geometry where
 
 import Prelude
-
-import Data.Array (concat, filter, intercalate, length, modifyAt, updateAt, (!!), (..))
+import Data.Array (concat, filter, intercalate, length, modifyAt, replicate, updateAt, (!!), (..))
+import Data.Array.NonEmpty ((!!)) as NE
 import Data.Foldable (foldl)
 import Data.Int (fromString)
 import Data.Maybe (Maybe(..))
 import Data.String (split, Pattern(..))
+import Data.String.Regex (Regex, match)
+import Data.String.Regex.Flags (noFlags)
+import Data.String.Regex.Unsafe (unsafeRegex)
 import Data.Traversable (traverse)
+import Data.Tuple (Tuple(..))
 
 --------------------------------------------------------------------------------
 -- Point
@@ -26,6 +30,16 @@ instance ordPoint :: Ord Point where
 
 instance showPoint :: Show Point where
   show (Point { x, y }) = "(" <> show x <> "," <> show y <> ")"
+
+pointRegex :: Regex
+pointRegex = unsafeRegex "\\(?(\\d+),(\\d+)\\)?" noFlags
+
+pointFromString :: String -> Maybe Point
+pointFromString s = do
+  m <- match pointRegex s
+  x <- fromString =<< (join $ m NE.!! 1)
+  y <- fromString =<< (join $ m NE.!! 2)
+  pure $ Point { x, y }
 
 --------------------------------------------------------------------------------
 -- Line
@@ -69,12 +83,18 @@ instance showRect :: Show Rect where
 newtype Grid a
   = Grid (Array (Array a))
 
-instance showGrid :: Show a => Show (Grid a) where
+instance showGridStrings :: Show (Grid String) where
   show (Grid rows) =
     let
-        showRow = map show >>> intercalate "" >>> (<>) "\n"
-     in
-       map showRow rows # foldl (<>) ""
+      showRow = foldl (<>) "\n"
+    in
+      map showRow rows # foldl (<>) ""
+else instance showGrid :: Show a => Show (Grid a) where
+  show (Grid rows) =
+    let
+      showRow = map show >>> intercalate "" >>> (<>) "\n"
+    in
+      map showRow rows # foldl (<>) ""
 
 data NeighborType
   = Adjacent
@@ -137,3 +157,16 @@ modifyGridAt (Point { x, y }) fn (Grid rows) = do
 
 insertGridAt :: forall a. Point -> a -> Grid a -> Maybe (Grid a)
 insertGridAt p i = modifyGridAt p (\_ -> i)
+
+-- | does not handle negative x/y coords, assumes 0,0 origin
+gridFromPoints :: forall a. Array Point -> Tuple a a -> Maybe (Grid a)
+gridFromPoints points (Tuple emptyValue filledValue) = do
+  (Point { x: x0, y: y0 }) <- points !! 0
+  { maxX, maxY } <- pure $ foldl updateMax { maxX: x0, maxY: y0 } points
+  grid <- pure $ Grid $ (\n -> replicate n emptyValue) <$> replicate (maxY + 1) (maxX + 1)
+  foldl (\g p -> g >>= insertGridAt p filledValue) (Just grid) points
+  where
+  updateMax a (Point { x, y }) =
+    { maxX: max x a.maxX
+    , maxY: max y a.maxY
+    }
