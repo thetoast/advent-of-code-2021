@@ -1,13 +1,14 @@
 module Day14 where
 
 import Prelude
-import Data.Array (concat, drop, snoc, take, (!!))
+
+import Data.Array (head, last, uncons, (!!))
 import Data.Foldable (foldM, foldl, maximum, minimum)
 import Data.List (List)
-import Data.Map (Map, empty, insert, insertWith, lookup, values)
+import Data.Map (Map, empty, insert, insertWith, keys, lookup, toUnfoldable, values)
 import Data.Maybe (Maybe(..))
 import Data.String (CodePoint, Pattern(..), codePointAt, split, toCodePointArray)
-import Data.Tuple (Tuple(..), fst)
+import Data.Tuple (Tuple(..))
 
 type Pair
   = Tuple CodePoint CodePoint
@@ -17,6 +18,12 @@ type Insertions
 
 type Polymer
   = Array CodePoint
+
+type PairCounts
+  = Map Pair Number
+
+type CodeCounts
+  = Map CodePoint Number
 
 makePair :: Array CodePoint -> Maybe Pair
 makePair pair = do
@@ -33,51 +40,54 @@ insertRule inserts rule = do
 parseRules :: String -> Maybe Insertions
 parseRules = split (Pattern "\n") >>> map (split (Pattern " -> ")) >>> foldM insertRule empty
 
-checkNextPair :: Insertions -> Polymer -> Pair -> Polymer
-checkNextPair inserts polymer pair = case lookup pair inserts of
-  Just insertion -> concat [ polymer, [ (fst pair), insertion ] ]
-  Nothing -> polymer
-
-processPolymer :: Insertions -> Polymer -> Polymer -> Polymer
-processPolymer inserts newPolymer oldPolymer = case take 2 oldPolymer of
-  [ a, b ] ->
-    let
-      pair = Tuple a b
-
-      rest = drop 1 oldPolymer
-
-      nextPolymer = checkNextPair inserts newPolymer pair
-    in
-      processPolymer inserts nextPolymer rest
-  [ a ] -> snoc newPolymer a
-  _ -> newPolymer
-
-step :: Int -> Insertions -> Polymer -> Polymer
-step num inserts polymer
-  | num == 0 = polymer
-  | otherwise = step (num - 1) inserts $ processPolymer inserts [] polymer
-
-makeCounts :: Polymer -> List Int
-makeCounts polymer =
+getPointCounts :: CodePoint -> CodePoint -> PairCounts -> List Number
+getPointCounts first last pairs =
   let
-    map = foldl (\m c -> insertWith (+) c 1 m) empty polymer
+    unfolded :: Array (Tuple Pair Number)
+    unfolded = toUnfoldable pairs
+
+    counts :: CodeCounts
+    counts = foldl (\m (Tuple (Tuple f s) n) -> insertWith (+) f n m # insertWith (+) s n) empty unfolded
   in
-    values map
+    insertWith (+) first 1.0 counts # insertWith (+) last 1.0 # values <#> \i -> div i 2.0
 
-solve1 :: String -> String -> Maybe Int
-solve1 input rules = do
+processPair :: Insertions -> PairCounts -> PairCounts -> Pair -> Maybe PairCounts
+processPair inserts oldCounts newCounts pair@(Tuple f s) = do
+  insertion <- lookup pair inserts
+  pairCount <- lookup pair oldCounts
+  pair1 <- pure $ Tuple f insertion
+  pair2 <- pure $ Tuple insertion s
+  pure $ insertWith (+) pair1 pairCount $ insertWith (+) pair2 pairCount newCounts
+
+makePairCounts :: Polymer -> PairCounts
+makePairCounts polymer = case uncons polymer of
+  Nothing -> empty
+  Just { head, tail } ->
+    foldl
+      ( \a c ->
+          { counts: insertWith (+) (Tuple a.last c) 1.0 a.counts
+          , last: c
+          }
+      )
+      { counts: empty, last: head }
+      tail
+      # _.counts
+
+processPolymerCounts :: Int -> Insertions -> PairCounts -> Maybe PairCounts
+processPolymerCounts times inserts counts
+  | times == 0 = Just counts
+  | otherwise = case foldM (processPair inserts counts) empty $ keys counts of
+    Just newCounts -> processPolymerCounts (times - 1) inserts newCounts
+    Nothing -> Just counts
+
+solve :: Int -> String -> String -> Maybe Number
+solve times input rules = do
   inserts <- parseRules rules
   polymer <- pure $ toCodePointArray input
-  counts <- pure $ makeCounts $ step 10 inserts polymer
-  max <- maximum counts
-  min <- minimum counts
-  pure (max - min)
-
-solve2 :: Int -> String -> String -> Maybe Int
-solve2 times input rules = do
-  inserts <- parseRules rules
-  polymer <- pure $ toCodePointArray input
-  counts <- pure $ makeCounts $ step times inserts polymer
-  max <- maximum counts
-  min <- minimum counts
+  first <- head polymer
+  last <- last polymer
+  initialPairCounts <- pure $ makePairCounts polymer
+  finalPointCounts <- getPointCounts first last <$> processPolymerCounts times inserts initialPairCounts
+  max <- maximum finalPointCounts
+  min <- minimum finalPointCounts
   pure (max - min)
