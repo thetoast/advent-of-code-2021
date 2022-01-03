@@ -23,7 +23,7 @@ newtype Point
   }
 
 instance eqPoint :: Eq Point where
-  eq (Point p1) (Point p2) = p1.x == p2.x && p2.y == p2.y
+  eq (Point p1) (Point p2) = p1.x == p2.x && p1.y == p2.y
 
 instance ordPoint :: Ord Point where
   compare (Point p1) (Point p2) = if p1.x == p2.x then compare p1.y p2.y else compare p1.x p2.x
