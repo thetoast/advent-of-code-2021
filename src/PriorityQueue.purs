@@ -7,6 +7,8 @@ module PriorityQueue
   , peekMin
   , popMax
   , popMin
+  , popMaxWithPriority
+  , popMinWithPriority
   , priority
   , push
   ) where
@@ -92,6 +94,32 @@ popMax = popWith S.findMax
 
 popMin :: forall p i. Ord p => Ord i => PriorityQueue p i -> Maybe { item :: i, queue :: PriorityQueue p i }
 popMin = popWith S.findMin
+
+popWithPriority ::
+  forall p i.
+  Ord p =>
+  Ord i =>
+  (Set (PQItem p i) -> Maybe (PQItem p i)) ->
+  PriorityQueue p i -> Maybe { item :: i, priority :: p, queue :: PriorityQueue p i }
+popWithPriority op (PQ { set, map }) = do
+  item@(PQI { i, p }) <- op set
+  newMap <- pure $ M.delete i map
+  newSet <- pure $ S.delete item set
+  pure { item: i, priority: p, queue: PQ { map: newMap, set: newSet } }
+
+popMaxWithPriority ::
+  forall p i.
+  Ord p =>
+  Ord i =>
+  PriorityQueue p i -> Maybe { item :: i, priority :: p, queue :: PriorityQueue p i }
+popMaxWithPriority = popWithPriority S.findMax
+
+popMinWithPriority ::
+  forall p i.
+  Ord p =>
+  Ord i =>
+  PriorityQueue p i -> Maybe { item :: i, priority :: p, queue :: PriorityQueue p i }
+popMinWithPriority = popWithPriority S.findMin
 
 member :: forall p i. Ord p => Ord i => i -> PriorityQueue p i -> Boolean
 member i (PQ { map }) = M.member i map

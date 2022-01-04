@@ -1,12 +1,14 @@
 module Day15 where
 
 import Prelude
+
 import Control.Monad.Rec.Class (Step(..), tailRecM)
+import Data.Array (filter)
 import Data.Foldable (foldM, foldl)
 import Data.Map (Map)
 import Data.Maybe (Maybe(..))
 import Data.Set (Set)
-import Data.Set (empty, insert) as S
+import Data.Set (empty, insert, member) as S
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 import Geometry (Grid, NeighborType(..), Point(..), Dimensions(..), gridDimensions, gridFromIntStrings, gridPoints, gridValueAt, validNeighbors)
@@ -74,32 +76,26 @@ updateRisk currentLevel frontier neighbor =
   in
     PQ.push newLevel neighbor frontier
 
-visit :: TraversalState -> RiskPoint -> Maybe TraversalState
-visit state point = do
-  currentRisk <- PQ.priority point state.frontier
+visitNext :: TraversalState -> Maybe TraversalState
+visitNext state = do
+  { item: point, priority: currentRisk, queue: poppedFrontier } <- PQ.popMinWithPriority state.frontier
   newFrontier <-
     pure
       $ case nodeEdges point state.cavern.graph of
-          Nothing -> state.frontier
-          Just neighbors -> foldl (updateRisk currentRisk) state.frontier neighbors
+          Nothing -> poppedFrontier
+          Just neighbors -> foldl (updateRisk currentRisk) poppedFrontier $ filter (\n -> not $ S.member n state.visited) neighbors
   pure
     $ state
         { visited = S.insert point state.visited
-        , frontier = PQ.delete point newFrontier
+        , frontier = newFrontier
         }
 
-lowestUnvisited :: TraversalState -> Maybe RiskPoint
-lowestUnvisited { frontier } = PQ.peekMin frontier
-
-makeVisits :: TraversalState -> RiskPoint -> Maybe TraversalState
-makeVisits state@{ cavern: { end } } point = tailRecM go { state, point }
+makeVisits :: TraversalState -> Maybe TraversalState
+makeVisits state@{ cavern: { end } } = tailRecM go state
   where
-  go { state: state', point: point' }
-    | point' == end = Just (Done state')
-    | otherwise = do
-      newState <- visit state' point'
-      next <- lowestUnvisited newState
-      Just (Loop { state: newState, point: next })
+  go state'
+    | PQ.peekMin state'.frontier == Just end = Just (Done state')
+    | otherwise = Loop <$> visitNext state'
 
 makeState :: Cavern -> TraversalState
 makeState cavern@{ start } =
@@ -109,9 +105,9 @@ makeState cavern@{ start } =
   }
 
 findLowestRisk :: Cavern -> Maybe Int
-findLowestRisk cavern@{ start, end } = do
+findLowestRisk cavern@{ end } = do
   initState <- pure $ makeState cavern
-  finalState <- makeVisits initState start
+  finalState <- makeVisits initState
   PQ.priority end finalState.frontier
 
 solve1 :: String -> Maybe Int
