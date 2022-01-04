@@ -3,7 +3,7 @@ module Day15 where
 import Prelude
 
 import Control.Monad.Rec.Class (Step(..), tailRecM)
-import Data.Array (filter)
+import Data.Array (concat, filter, (..))
 import Data.Foldable (foldM, foldl)
 import Data.Map (Map)
 import Data.Maybe (Maybe(..))
@@ -11,7 +11,7 @@ import Data.Set (Set)
 import Data.Set (empty, insert, member) as S
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
-import Geometry (Grid, NeighborType(..), Point(..), Dimensions(..), gridDimensions, gridFromIntStrings, gridPoints, gridValueAt, validNeighbors)
+import Geometry (Grid(..), NeighborType(..), Point(..), Dimensions(..), gridDimensions, gridFromIntStrings, gridPoints, gridValueAt, validNeighbors)
 import Graph (Graph, Node, addEdge, emptyGraph, nodeEdges)
 import PriorityQueue (PriorityQueue)
 import PriorityQueue as PQ
@@ -112,3 +112,31 @@ findLowestRisk cavern@{ end } = do
 
 solve1 :: String -> Maybe Int
 solve1 input = parseInput input >>= findLowestRisk
+
+plusRow :: Int -> Array Int -> Array Int
+plusRow n = map (\i -> if i + n > 9 then i + n - 9 else i + n)
+
+explodeRow :: Int -> Array Int -> Array Int
+explodeRow times row = concat $ flip plusRow row <$> 0..(times-1)
+
+explodeGrid :: Int -> Grid Int -> Grid Int
+explodeGrid times (Grid rows) =
+  let
+    explodedRows = rows <#> explodeRow times
+    explodedGrid = 0..(times-1) <#> (\i -> explodedRows <#> plusRow i) # concat
+  in
+    Grid explodedGrid
+
+parseAndExplodeInput :: String -> Maybe Cavern
+parseAndExplodeInput input = do
+  grid <- explodeGrid 5 <$> gridFromIntStrings input
+  allPoints <- pure $ gridPoints grid
+  graph <- foldM (addPoint grid) emptyGraph allPoints
+  startPoint <- pure $ Point { x: 0, y: 0 }
+  endPoint <- (\(Dimensions { width, height }) -> Point { x: width - 1, y: height - 1 }) <$> gridDimensions grid
+  start <- gridValueAt startPoint grid <#> \level -> { level, point: startPoint }
+  end <- gridValueAt endPoint grid <#> \level -> { level, point: endPoint }
+  pure { start, end, graph }
+
+solve2 :: String -> Maybe Int
+solve2 input = parseAndExplodeInput input >>= findLowestRisk
