@@ -2,17 +2,17 @@ module Day15 where
 
 import Prelude
 import Control.Monad.Rec.Class (Step(..), tailRecM)
-import Data.Array (filter, uncons)
 import Data.Foldable (foldM, foldl)
-import Data.Map (Map, lookup)
-import Data.Map (empty, insert) as M
-import Data.Maybe (Maybe(..), isJust)
-import Data.Set (Set, delete, toUnfoldable)
+import Data.Map (Map)
+import Data.Maybe (Maybe(..))
+import Data.Set (Set)
 import Data.Set (empty, insert) as S
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 import Geometry (Grid, NeighborType(..), Point(..), Dimensions(..), gridDimensions, gridFromIntStrings, gridPoints, gridValueAt, validNeighbors)
 import Graph (Graph, Node, addEdge, emptyGraph, nodeEdges)
+import PriorityQueue (PriorityQueue)
+import PriorityQueue as PQ
 
 type RiskPoint
   = Node { point :: Point, level :: Int }
@@ -29,10 +29,12 @@ type Cavern
 type RiskMap
   = Map RiskPoint Int
 
+type Frontier
+  = PriorityQueue Int RiskPoint
+
 type TraversalState
   = { visited :: Set RiskPoint
-    , unvisited :: Set RiskPoint
-    , lowestRisk :: RiskMap
+    , frontier :: Frontier
     , cavern :: Cavern
     }
 
@@ -61,54 +63,33 @@ parseInput input = do
   end <- gridValueAt endPoint grid <#> \level -> { level, point: endPoint }
   pure { start, end, graph }
 
-updateRisk :: Int -> RiskMap -> RiskPoint -> RiskMap
-updateRisk currentLevel risks neighbor =
+updateRisk :: Int -> Frontier -> RiskPoint -> Frontier
+updateRisk currentLevel frontier neighbor =
   let
-    neighborLevel = lookup neighbor risks
+    neighborLevel = PQ.priority neighbor frontier
 
     newLevel = case neighborLevel of
       Just current -> min current (currentLevel + neighbor.level)
       Nothing -> currentLevel + neighbor.level
   in
-    M.insert neighbor newLevel risks
+    PQ.push newLevel neighbor frontier
 
 visit :: TraversalState -> RiskPoint -> Maybe TraversalState
 visit state point = do
-  currentRisk <- lookup point state.lowestRisk
-  newRisks <-
+  currentRisk <- PQ.priority point state.frontier
+  newFrontier <-
     pure
       $ case nodeEdges point state.cavern.graph of
-          Nothing -> state.lowestRisk
-          Just neighbors -> foldl (updateRisk currentRisk) state.lowestRisk neighbors
+          Nothing -> state.frontier
+          Just neighbors -> foldl (updateRisk currentRisk) state.frontier neighbors
   pure
     $ state
         { visited = S.insert point state.visited
-        , unvisited = delete point state.unvisited
-        , lowestRisk = newRisks
+        , frontier = PQ.delete point newFrontier
         }
 
 lowestUnvisited :: TraversalState -> Maybe RiskPoint
-lowestUnvisited { lowestRisk, unvisited } = do
-  canVisit <- pure $ filter (\n -> isJust $ lookup n lowestRisk) $ toUnfoldable unvisited
-  { head } <- uncons canVisit
-  risk <- lookup head lowestRisk
-  initState <- pure { best: head, risk }
-  check <-
-    pure
-      ( \a u -> do
-          unvisitedRisk <- lookup u lowestRisk
-          if unvisitedRisk < a.risk then Just a { best = u, risk = unvisitedRisk } else Just a
-      )
-  _.best <$> foldM check initState canVisit
-
---makeVisits :: TraversalState -> RiskPoint -> Maybe TraversalState
---makeVisits state@{ cavern: { end } } point =
---  if point == end then
---    Just state
---  else do
---    newState <- visit state point
---    next <- lowestUnvisited newState
---    makeVisits newState next
+lowestUnvisited { frontier } = PQ.peekMin frontier
 
 makeVisits :: TraversalState -> RiskPoint -> Maybe TraversalState
 makeVisits state@{ cavern: { end } } point = tailRecM go { state, point }
@@ -121,10 +102,9 @@ makeVisits state@{ cavern: { end } } point = tailRecM go { state, point }
       Just (Loop { state: newState, point: next })
 
 makeState :: Cavern -> TraversalState
-makeState cavern@{ graph, start } =
+makeState cavern@{ start } =
   { visited: S.empty
-  , unvisited: graph.nodes
-  , lowestRisk: M.insert start 0 M.empty
+  , frontier: PQ.push 0 start PQ.empty
   , cavern
   }
 
@@ -132,7 +112,7 @@ findLowestRisk :: Cavern -> Maybe Int
 findLowestRisk cavern@{ start, end } = do
   initState <- pure $ makeState cavern
   finalState <- makeVisits initState start
-  lookup end finalState.lowestRisk
+  PQ.priority end finalState.frontier
 
 solve1 :: String -> Maybe Int
 solve1 input = parseInput input >>= findLowestRisk
