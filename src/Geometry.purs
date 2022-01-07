@@ -6,6 +6,7 @@ import Data.Array.NonEmpty ((!!)) as NE
 import Data.Foldable (foldl)
 import Data.Int (fromString)
 import Data.Maybe (Maybe(..))
+import Data.Ord (abs)
 import Data.String (split, Pattern(..))
 import Data.String.Regex (Regex, match)
 import Data.String.Regex.Flags (noFlags)
@@ -76,6 +77,32 @@ newtype Rect
 
 instance showRect :: Show Rect where
   show (Rect { origin, size }) = "( " <> show origin <> " " <> show size <> " )"
+
+-- | Creates a rectangle from two opposing points, normalizing the origin so that
+-- | it is min x and y and so that the dimensions are positive
+fromPoints :: Point -> Point -> Rect
+fromPoints (Point { x: x1, y: y1 }) (Point { x: x2, y: y2 }) =
+  let
+    origin = Point { x: min x1 x2, y: min y1 y2 }
+
+    size = Dimensions { width: abs $ x2 - x1 + 1, height: abs $ y2 - y1 + 1 }
+  in
+    Rect { origin, size }
+
+minX :: Rect -> Int
+minX (Rect { origin: Point { x } }) = x
+
+maxX :: Rect -> Int
+maxX (Rect { origin: Point { x }, size: Dimensions { width } }) = x + width - 1
+
+minY :: Rect -> Int
+minY (Rect { origin: Point { y } }) = y
+
+maxY :: Rect -> Int
+maxY (Rect { origin: Point { y }, size: Dimensions { height } }) = y + height - 1
+
+contains :: Point -> Rect -> Boolean
+contains (Point { x, y }) r = x >= minX r && x <= maxX r && y >= minY r && y <= maxY r
 
 --------------------------------------------------------------------------------
 -- Grid
